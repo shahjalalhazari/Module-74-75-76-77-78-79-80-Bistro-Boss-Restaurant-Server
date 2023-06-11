@@ -46,6 +46,12 @@ async function run() {
         ////////  Users APIs ///////////////
         app.post("/users", async (req, res) => {
             const user = req.body;
+            const query = {email: user.email};
+            // check if the user is exists or not for social login
+            const existingUser = await userCollection.findOne(query);
+            if (existingUser) {
+                return res.send({message: "User Already Exists."})
+            }
             const result = await userCollection.insertOne(user);
             res.send(result);
         })
