@@ -17,7 +17,8 @@ app.get("/", (req, res) => {
 //////////// MongoDb Connection Start //////////////
 const {
     MongoClient,
-    ServerApiVersion
+    ServerApiVersion,
+    ObjectId
 } = require('mongodb');
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.cp5mulo.mongodb.net/?retryWrites=true&w=majority`;
 
@@ -54,7 +55,8 @@ async function run() {
         })
 
 
-        // Cart Collections
+        /////////// Cart Collections ////////////
+        // get all the cart item of current user
         app.get("/carts", async (req, res) => {
             const email = req.query.email;
             if (!email) {
@@ -65,12 +67,21 @@ async function run() {
             res.send(result);
         })
 
+        // add item to cart of current user
         app.post("/carts", async (req, res) => {
             const item = req.body;
-            console.log(item);
             const result = await cartCollection.insertOne(item);
             res.send(result);
         });
+
+        // delete item from current user cart
+        app.delete("/carts/:id", async (req, res) => {
+            const id = req.params.id;
+            console.log(id);
+            const query = {_id: new ObjectId(id)};
+            const result = await cartCollection.deleteOne(query);
+            res.send(result);
+        })
 
 
         // Send a ping to confirm a successful connection
