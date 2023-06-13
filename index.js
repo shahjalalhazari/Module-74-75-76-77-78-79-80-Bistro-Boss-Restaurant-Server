@@ -61,6 +61,21 @@ async function run() {
             }
             const result = await userCollection.insertOne(user);
             res.send(result);
+        });
+
+
+        // update user role
+        app.patch("/users/admin/:id", async (req, res) => {
+            const id = req.params.id; //Get the user id
+            console.log(id);
+            const filter = {_id: new ObjectId(id)}; // Filter the user by id
+            const updateDoc = { // set which thing want to update
+                $set: {
+                    role: "admin"
+                }
+            };
+            const result = await userCollection.updateOne(filter, updateDoc);
+            res.send(result)
         })
 
 
