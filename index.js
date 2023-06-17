@@ -92,6 +92,22 @@ async function run() {
         });
 
 
+        // get is user admin or not
+        app.get("/users/admin/:email", verifyJWT, async (req, res) => {
+            const email = req.params.email;
+
+            // verify with JWT
+            if (req.decoded.email !== email) {
+                res.send({admin: false});
+            }
+
+            const query = {email: email};
+            const user = await userCollection.findOne(query);
+            const result = {admin: user?.role === "admin"};
+            res.send(result);
+        })
+
+
         // update user role
         app.patch("/users/admin/:id", async (req, res) => {
             const id = req.params.id; //Get the user id
