@@ -67,8 +67,20 @@ async function run() {
         app.post("/jwt", (req, res) => {
             const user = req.body;
             const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {expiresIn: "1h"});
-            res.send(token);
+            res.send({token});
         })
+
+        // Verify user is admin or not
+        // warning: use verifyJWT before using verifyAdmin
+        const verifyAdmin = async (req, res, next) => {
+            const email = req.decoded.email;
+            const query = {email: email};
+            const user = await userCollection.findOne(query);
+            if (user?.role !== "admin") {
+                return res.status(403).send({error: true, message: "forbidden message"})
+            }
+            next();
+        }
 
 
         ////////  Users APIs ///////////////
@@ -127,7 +139,15 @@ async function run() {
         app.get("/menu", async (req, res) => {
             const result = await menuCollection.find().toArray();
             res.send(result);
-        })
+        });
+
+
+        // add or post new menu item
+        app.post("/menu", verifyJWT, verifyAdmin, async (req, res) => {
+            const newItem = req.body;
+            const result = await menuCollection.insertOne(newItem);
+            res.send(result);
+        });
 
 
         ////////// Reviews APIs //////////////
