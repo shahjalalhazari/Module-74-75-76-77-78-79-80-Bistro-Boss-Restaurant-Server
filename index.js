@@ -231,6 +231,23 @@ async function run() {
 
             res.send({InsertResult, deleteResult});
         });
+
+        ////////////// api for admin ///////////
+        app.get("/admin-stats", verifyJWT, verifyAdmin, async (req, res) => {
+            // count all the user as customers
+            const customers = await userCollection.estimatedDocumentCount();
+            // count all the menu items as products
+            const products = await menuCollection.estimatedDocumentCount();
+            // count all the payments as orders
+            const orders = await paymentCollection.estimatedDocumentCount();
+            // add all the payment price together to get the revenue
+            const payments = await paymentCollection.find().toArray();
+            const revenue = payments.reduce((sum, payment) => sum + payment.price, 0);
+    
+            res.send({
+                customers, products, orders, revenue
+            })
+        })
         
 
         // Send a ping to confirm a successful connection
