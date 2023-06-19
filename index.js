@@ -3,6 +3,8 @@ const cors = require('cors');
 require("dotenv").config();
 const jwt = require('jsonwebtoken');
 
+const stripe = require("stripe")(process.env.PAYMENT_SECRET_KEY);
+
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -14,7 +16,7 @@ const verifyJWT = (req, res, next) => {
     const authorization = req.headers.authorization;
     if (!authorization) {
         return res.status(401).send({ error: true, message: "unauthorized access" });
-    }
+    };
     // Split the authorization header and get only the token.
     const token = authorization.split(" ")[1];
 
@@ -22,11 +24,11 @@ const verifyJWT = (req, res, next) => {
     jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
         if (err) {
             return res.status(401).send({ error: true, message: "unauthorized access" });
-        }
+        };
         req.decoded = decoded;
         next();
-    })
-}
+    });
+};
 
 
 app.get("/", (req, res) => {
@@ -61,6 +63,7 @@ async function run() {
         const menuCollection = client.db("BistroBossDb").collection("menu");
         const reviewCollection = client.db("BistroBossDb").collection("reviews");
         const cartCollection = client.db("BistroBossDb").collection("carts");
+        const paymentCollection = client.db("BistroBossDb").collection("payments");
 
 
         ////////// JWT TOKEN API ///////////
@@ -68,7 +71,7 @@ async function run() {
             const user = req.body;
             const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {expiresIn: "1h"});
             res.send(token);
-        })
+        });
 
         // Verify user is admin or not
         // warning: use verifyJWT before using verifyAdmin
@@ -78,9 +81,9 @@ async function run() {
             const user = await userCollection.findOne(query);
             if (user?.role !== "admin") {
                 return res.status(403).send({error: true, message: "forbidden message"})
-            }
+            };
             next();
-        }
+        };
 
 
         ////////  Users APIs ///////////////
@@ -88,7 +91,7 @@ async function run() {
         app.get("/users", async (req, res) => {
             const result = await userCollection.find().toArray();
             res.send(result);
-        })
+        });
 
         // add new user after signup
         app.post("/users", async (req, res) => {
@@ -98,7 +101,7 @@ async function run() {
             const existingUser = await userCollection.findOne(query);
             if (existingUser) {
                 return res.send({message: "User Already Exists."})
-            }
+            };
             const result = await userCollection.insertOne(user);
             res.send(result);
         });
@@ -111,13 +114,13 @@ async function run() {
             // verify with JWT
             if (req.decoded.email !== email) {
                 res.send({admin: false});
-            }
+            };
 
             const query = {email: email};
             const user = await userCollection.findOne(query);
             const result = {admin: user?.role === "admin"};
             res.send(result);
-        })
+        });
 
 
         // update user role
@@ -131,7 +134,7 @@ async function run() {
             };
             const result = await userCollection.updateOne(filter, updateDoc);
             res.send(result)
-        })
+        });
 
 
         /////////// Menu APIs //////////////
@@ -155,7 +158,7 @@ async function run() {
             const query = {_id: new ObjectId(id)};
             const result = await menuCollection.deleteOne(query);
             res.send(result)
-        })
+        });
 
 
         ////////// Reviews APIs //////////////
@@ -163,7 +166,7 @@ async function run() {
         app.get("/reviews", async (req, res) => {
             const result = await reviewCollection.find().toArray();
             res.send(result);
-        })
+        });
 
 
         /////////// Cart APIs ////////////
@@ -172,17 +175,17 @@ async function run() {
             const email = req.query.email;
             if (!email) {
                 res.send([])
-            }
+            };
 
             const decodedEmail = req.decoded.email;
 
             if (email !== decodedEmail) {
                 return res.status(403).send({ error: true, message: "Forbidden Access" });
-            }
+            };
             const query = {email: email};
             const result = await cartCollection.find(query).toArray();
             res.send(result);
-        })
+        });
 
         // add item to cart of current user
         app.post("/carts", async (req, res) => {
@@ -198,8 +201,37 @@ async function run() {
             const query = {_id: new ObjectId(id)};
             const result = await cartCollection.deleteOne(query);
             res.send(result);
-        })
+        });
 
+
+        /////////// Payment APIs ////////////
+        // create payment intent
+        app.post("/create-payment-intent", verifyJWT, async (req, res) => {
+            const {price} = req.body;
+            const amount = Math.round(price * 100);
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: amount,
+                currency: "usd",
+                payment_method_types: ["card"]
+            });
+            res.send({
+                clientSecret: paymentIntent.client_secret,
+            });
+        });
+
+
+        // app completed payment details
+        app.post("/payments", verifyJWT, async (req, res) => {
+            const payment = req.body;
+            const InsertResult = await paymentCollection.insertOne(payment);
+
+            // delete cart items after payment completed
+            const query = {_id: { $in: payment.cartItems.map(id => new ObjectId(id))}};
+            const deleteResult = await cartCollection.deleteMany(query);
+
+            res.send({InsertResult, deleteResult});
+        });
+        
 
         // Send a ping to confirm a successful connection
         await client.db("admin").command({
@@ -208,7 +240,7 @@ async function run() {
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
         // await client.close();
-    }
+    };
 }
 run().catch(console.dir);
 
@@ -216,4 +248,4 @@ run().catch(console.dir);
 
 app.listen(port, () => {
     console.log(`Bistro Boss server is running on ${port}`)
-})
+});
